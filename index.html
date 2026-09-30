@@ -1,0 +1,779 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#B3362B">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="成都">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐼</text></svg>">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png">
+  <title>成都・都江堰 4天3夜 行程表</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;500;600;700&display=swap');
+    body { margin: 0; background-color: #fdfbf7; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .leaflet-container { font-family: 'Noto Serif TC', 'Georgia', serif; }
+    .day-marker {
+      display:flex; align-items:center; justify-content:center;
+      width:30px; height:30px; border-radius:50%;
+      color:#fff; font-weight:700; font-size:13px;
+      border:2px solid #fff; box-shadow:0 2px 6px rgba(0,0,0,0.25);
+    }
+    .leaflet-popup-content-wrapper { border-radius:10px; }
+    .leaflet-popup-content { margin:10px 14px; font-size:13px; line-height:1.5; }
+    .leaflet-popup-content b { display:block; margin-bottom:3px; font-size:14px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // 出發日不寫在程式裡（網站是公開的），在「🧪 預覽」選單設定，只存在這支手機
+    const START_KEY = "chengdu-trip-start";
+    const parseYmd = str => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(str || "");
+      return m ? new Date(+m[1], +m[2] - 1, +m[3]) : null;
+    };
+    const toYmd = d => d ? `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` : "";
+    const loadTripStart = () => {
+      try { return parseYmd(localStorage.getItem(START_KEY)); } catch (e) { return null; }
+    };
+    const TRIP_DAYS = 4;
+
+    const DAYS = [
+      { day:0, weekday:"週五", date:"Day 1", title:"台北 → 成都", subtitle:"下午出發，晚上入住新良", color:"#5B6B73", emoji:"✈️", transport:"飛機＋滴滴",
+        transportDetail:"桃園 14:20 → 成都雙流 T1 18:05（長榮直飛）→ 滴滴到安逸・新良大飯店，約 35–40 分鐘",
+        hotel:"安逸・新良大飯店（親子大小床，第 1 晚）",
+        schedule: [
+          { time:"11:15", activity:"接孩子、出發去機場", detail:"孩子請最後 1–2 堂課。行李先放車上，從學校直接去桃園機場，約 50–60 分鐘。", icon:"🚗" },
+          { time:"12:20", activity:"抵達桃園機場", detail:"已先線上報到。Trip.com 白金會員的免費貴賓室可以留到今天用。", icon:"🛫" },
+          { time:"14:20", activity:"桃園起飛", detail:"長榮直飛，飛行約 3 小時 45 分。", icon:"✈️" },
+          { time:"18:05", activity:"成都雙流 T1 落地", detail:"入境、領行李約 30–40 分鐘。開啟 eSIM，確認支付寶、滴滴可用。", icon:"🛬" },
+          { time:"19:30", activity:"入住新良", detail:"叫滴滴到飯店（地址在「總覽」頁，給司機看）。入住時跟櫃台說好：「週六早上寄放大行李，週日下午回來續住」，行李貼姓名牌。", icon:"🏨" },
+          { time:"20:00", activity:"飯店附近吃晚餐", detail:"簡單吃就好。", icon:"🍜" },
+          { time:"20:30", activity:"李寧春熙路旗艦店試鞋", detail:"一個大人陪孩子回飯店準備睡覺，另一個人去試越影寬楦版（春熙路南段 19 號）。滿意就直接買，明天就能穿。", icon:"👟" },
+          { time:"21:00", activity:"孩子睡覺", detail:"", icon:"🌙" },
+        ],
+        tips:"今天只有一個任務：平安到飯店睡覺。行李寄放一定要今晚先講好，明天早上才不會手忙腳亂。",
+      },
+      { day:1, weekday:"週六", date:"Day 2", title:"寬窄巷子 → 都江堰南橋夜景", subtitle:"早上老街，中午到都江堰，晚上看夜景", color:"#2F7D5B", emoji:"🌉", transport:"滴滴＋地鐵＋城際",
+        transportDetail:"新良 → 寬窄巷子（滴滴約 15 分）→ 走到通惠門站 → 2 號線到犀浦 → 站內轉城際到離堆公園（約 30 分鐘）→ 走 210 公尺到千嶼。大行李寄放新良！",
+        hotel:"千嶼精品民宿（都江堰景區南橋店）",
+        schedule: [
+          { time:"08:30", activity:"早餐、寄放大行李", detail:"大行李寄新良櫃台，只帶過夜背包。", icon:"🎒" },
+          { time:"08:45", activity:"叫車去寬窄巷子", detail:"約 15 分鐘。", icon:"🚕" },
+          { time:"09:00", activity:"寬窄巷子", detail:"商業化的仿古步行街。9 點部分店家還沒開，逛到 10 點多會陸續開門。不在巷子裡吃正餐，性價比不高。", icon:"🏮" },
+          { time:"10:15", activity:"走到通惠門站", detail:"約 10 分鐘。通惠門在 2 號線上，不用轉線。", icon:"🚶" },
+          { time:"10:30", activity:"2 號線到犀浦", detail:"約 12 站、30 分鐘。", icon:"🚇" },
+          { time:"11:00", activity:"犀浦站內轉城際", detail:"月台上出地鐵閘機，走一二十公尺就是城際安檢口。抵達後至少預留約 20 分鐘再搭城際，搭 11:20 左右的班次。台胞證如果刷不了閘機，走人工通道。", icon:"🚆" },
+          { time:"11:50", activity:"離堆公園站 → 千嶼寄背包", detail:"出站走約 210 公尺。還沒到入住時間，先寄放背包。樓下就是仰天窩廣場的熊貓自拍點。", icon:"🏨" },
+          { time:"12:00", activity:"古城午餐、散步", detail:"", icon:"🥢" },
+          { time:"14:00", activity:"入住、午睡", detail:"讓孩子補眠，晚上才有精神。", icon:"😴" },
+          { time:"17:00", activity:"古城吃晚餐", detail:"冬天天黑早，晚餐提早吃。順便買好明天的早餐。", icon:"🍜" },
+          { time:"18:15", activity:"南橋、天府源廊橋看藍眼淚", detail:"冬天約 18:00–18:30 開燈，從上游一段段亮起，七點前全亮。南橋人多的話，下游的天府源廊橋人比較少。", icon:"🌉" },
+          { time:"19:15", activity:"回千嶼、洗澡", detail:"冷的話叫車。21:00 睡。", icon:"🛏️" },
+        ],
+        tips:"冬季可能處於年度維護（歲修）階段，實際水量與夜景效果出發前再看最新現況。明天 7:40 要出門看熊貓，今晚早睡。",
+      },
+      { day:2, weekday:"週日", date:"Day 3", title:"熊貓谷 → 梨園會館變臉 → 春熙路", subtitle:"早上熊貓，下午看變臉，晚上逛春熙路", color:"#B3362B", emoji:"🐼", transport:"滴滴＋城際＋地鐵",
+        transportDetail:"千嶼 → 熊貓谷（滴滴約 15 分）→ 古城午餐 → 千嶼拿背包 → 離堆公園站城際 → 犀浦轉 2 號線 → 春熙路站 → 新良 → 梨園會館（滴滴約 3 公里）→ 春熙路（滴滴約 10 分）→ 走回新良",
+        hotel:"安逸・新良大飯店（同一間，第 3 晚）",
+        schedule: [
+          { time:"07:00", activity:"起床、早餐", detail:"吃前一晚在古城買好的早餐。", icon:"☕" },
+          { time:"07:30", activity:"退房、背包寄放千嶼", detail:"先確認民宿早上有人可以辦退房。中午去搭城際時順路拿。", icon:"🎒" },
+          { time:"07:40", activity:"叫車去熊貓谷", detail:"約 15 分鐘。上車時就問司機中午能不能回來接。", icon:"🚕" },
+          { time:"08:00", activity:"熊貓谷入園", detail:"冬季開園時間出發前再確認。大熊貓上午最活躍，先看大熊貓。", icon:"🐼" },
+          { time:"10:00", activity:"小熊貓區", detail:"依官方當期規則，確認是否需另外預約或排隊。在山上，要走一段上坡。", icon:"🐾" },
+          { time:"10:45", activity:"讓孩子挑一隻熊貓玩偶", detail:"出園前在紀念品店，讓孩子自己選。", icon:"🧸" },
+          { time:"11:00", activity:"離開熊貓谷", detail:"熊貓谷附近空車少：請早上的司機回來接，或在滴滴預約回程。", icon:"🚕" },
+          { time:"11:15", activity:"古城午餐", detail:"", icon:"🍜" },
+          { time:"12:30", activity:"千嶼拿背包 → 離堆公園站", detail:"民宿就在車站旁。", icon:"🎒" },
+          { time:"12:45–13:00", activity:"城際回成都（以實際班次為準）", detail:"離堆公園 → 犀浦約 30 分鐘，轉 2 號線到春熙路站約 35 分鐘，再走約 9 分鐘到新良。孩子可以在車上先睡。", icon:"🚆" },
+          { time:"14:15", activity:"回新良入住、拿行李、午睡", detail:"休息到 15:35。", icon:"🏨" },
+          { time:"15:40", activity:"叫車去梨園會館（文殊院店）", detail:"約 3 公里。五嶽宮街 33 號。", icon:"🚕" },
+          { time:"15:50", activity:"換票、選位子", detail:"開演前 40 分鐘開始換票，座位不劃位。選前兩排中間或靠走道的位置，木偶互動和吐火看得最清楚。", icon:"🎫" },
+          { time:"16:30", activity:"梨園會館・川劇變臉", detail:"約 60–70 分鐘：木偶、滾燈、手影、雜技，壓軸是變臉和吐火。蓋碗茶、瓜子另外付費。", icon:"🎭" },
+          { time:"17:45", activity:"文殊院紅牆拍照、買糕點", detail:"文殊院 17:00 關門，但大門兩側的紅牆和「幸、福」字在外面就能拍。宮廷糕點、聞酥園排隊 10–15 分鐘內才買，人多就改週一在建設路買；也可以買個蛋烘糕。", icon:"📸" },
+          { time:"18:15", activity:"晚餐", detail:"在文殊坊吃小吃（例如洞子口張二哥涼粉、嚴太婆鍋盔），或叫車回春熙路一帶吃。", icon:"🥢" },
+          { time:"19:00", activity:"春熙路散步", detail:"週五的李寧不滿意的話，去 361°（大科甲巷 8 號利都廣場 A 座 1 樓）試赤焰寬楦版。IFS 的爬牆熊貓晚上也可以順路看。", icon:"🚶" },
+          { time:"20:00", activity:"走回新良", detail:"洗澡，21:00 睡。", icon:"🌙" },
+        ],
+        tips:"熊貓谷全程要走路，穿好走的鞋；回程車先安排好。下午的午睡很重要。梨園會館 16:30 的場次出發前一個月要確認（兩間分店場次差不多時選文殊院店），沒有的話改到週一 14:00。晚上的春熙路散步是彈性的，孩子累了就直接回飯店。",
+      },
+      { day:3, weekday:"週一", date:"Day 4", title:"IFS＋東郊記憶 → 回台灣", subtitle:"拍照就好，輕鬆收尾", color:"#946A10", emoji:"🏠", transport:"走路＋滴滴",
+        transportDetail:"新良 → IFS（走路）→ 東郊記憶（滴滴約 20 分）→ 建設路（滴滴約 10 分）→ 新良 → 雙流 T1（滴滴約 35–40 分）",
+        hotel:"回家！",
+        schedule: [
+          { time:"08:00", activity:"睡飽、吃早餐", detail:"", icon:"☕" },
+          { time:"10:00", activity:"IFS 爬牆熊貓", detail:"商場開門後搭電梯上 7 樓看熊貓正臉；熊貓屁股從街上往上拍。週日晚上已經看過的話，早上可以睡晚一點。先不退房。", icon:"📸" },
+          { time:"10:30", activity:"叫車去東郊記憶", detail:"約 20 分鐘。", icon:"🚕" },
+          { time:"10:50", activity:"東郊記憶", detail:"拍成都牆、老火車頭，停留 20–30 分鐘，不用門票。", icon:"🚂" },
+          { time:"11:15", activity:"叫車去建設路", detail:"約 10 分鐘。東郊記憶到建設路小吃街（電子科大沙河校區旁）走路要 2.5–3 公里，不要用走的。", icon:"🚕" },
+          { time:"11:30", activity:"建設路小吃巡禮＋水果", detail:"看孩子的狀態，想吃就逛，累了就直接回飯店。宮廷糕點在建設路有分店，想帶回台灣的糕點在這裡買最新鮮。當季耙耙柑、丑柑在當地吃完（新鮮水果不能帶回台灣）。", icon:"🍊" },
+          { time:"12:30", activity:"回新良休息", detail:"延遲退房到幾點，入住時先問清楚；退房後行李寄櫃台。", icon:"🏨" },
+          { time:"14:00", activity:"（備案）梨園會館", detail:"只有週日沒看到才排：演到約 15:10，回新良拿行李。", icon:"🎭" },
+          { time:"16:30", activity:"拿行李、叫車去機場", detail:"雙流 T1 約 35–40 分鐘。", icon:"🚕" },
+          { time:"17:20", activity:"抵達雙流 T1", detail:"起飛前 2 小時報到。", icon:"🛫" },
+          { time:"19:20", activity:"成都起飛", detail:"長榮直飛。", icon:"✈️" },
+          { time:"22:40", activity:"抵達桃園", detail:"搭預約的機場接送回家，約 00:15 到家。", icon:"🛬" },
+        ],
+        tips:"週一是中國平日，市區人少。今天只拍照、吃點東西，下午好好休息再去機場。回到家接近午夜，隔天孩子上學會累，可以考慮讓他晚點到校。",
+      },
+    ];
+
+    // 預訂清單（勾選狀態會記在這支手機的瀏覽器裡）
+    const BOOKING = [
+      { group:"已完成", color:"#2F7D5B", items:[
+        { id:"flight", text:"機票：長榮直飛來回（Trip.com，已付 NT$44,352）", done:true },
+        { id:"school", text:"孩子 Day 1 請最後 1–2 堂課（已問過老師）", done:true },
+        { id:"h1", text:"成都：安逸・新良 Day 1（親子大小床）", done:true },
+        { id:"h2q", text:"都江堰：千嶼精品民宿 Day 2", done:true },
+        { id:"h3", text:"成都：安逸・新良 Day 3（同房型）", done:true },
+      ]},
+      { group:"住宿待辦", color:"#457B9D", items:[
+        { id:"hc1", text:"取消璞・原舍（免費取消截止日前）" },
+        { id:"hq1", text:"千嶼：確認禁菸房、叫車能不能到門口、Day 3 早上 7:30 能不能退房並寄放背包" },
+        { id:"n1", text:"新良：高樓層、遠離電梯的安靜房間" },
+        { id:"n2", text:"新良：Day 2 寄放大行李、Day 3 回來續住" },
+        { id:"n3", text:"新良：Day 4 延遲退房可以到幾點" },
+      ]},
+      { group:"門票與車票", color:"#B3362B", items:[
+        { id:"t1", text:"熊貓谷門票（微信公眾號「熊貓谷」，台胞證實名）" },
+        { id:"t2b", text:"小熊貓區：依官方當期規則確認是否需預約或排隊" },
+        { id:"t4b", text:"梨園會館 Day 3 16:30 場（場次差不多時選文殊院店；備案 Day 4 14:00）" },
+        { id:"t5", text:"城際：犀浦 → 離堆公園 Day 2，11:20 左右（12306 / Trip.com）" },
+        { id:"t6", text:"城際：離堆公園 → 犀浦 Day 3，12:30 左右" },
+        { id:"t7", text:"12306：三人的台胞證乘車人資料提前驗證" },
+      ]},
+      { group:"出發前一個月再確認", color:"#946A10", items:[
+        { id:"c1", text:"熊貓谷冬季開園時間、票價、有沒有觀光車" },
+        { id:"c5", text:"南橋藍眼淚最新現況（冬季維護、水量）" },
+        { id:"c6", text:"梨園會館最新場次" },
+        { id:"c7", text:"城際最新時刻表" },
+        { id:"c4", text:"中國國定假日安排（前一年 11 月底左右公布）" },
+      ]},
+      { group:"行前準備", color:"#5B6B73", items:[
+        { id:"p1", text:"護照、台胞證效期（孩子的護照特別看）" },
+        { id:"p2", text:"Trip.com 免費 eSIM 流量包" },
+        { id:"p3", text:"支付寶、微信支付、滴滴確認可用" },
+        { id:"p4", text:"Day 1 WFH 安排" },
+        { id:"p5", text:"孩子請假單" },
+        { id:"p6", text:"Day 4 深夜回桃園的機場接送" },
+        { id:"p7", text:"保暖衣物：輕羽絨、保暖內層、好走的鞋、摺傘" },
+        { id:"p8", text:"出發前讓孩子看 2–3 分鐘變臉、吐火影片，先知道是表演" },
+        { id:"p9", text:"用高德確認李寧、361° 春熙路門市的營業時間和寬楦庫存" },
+      ]},
+    ];
+
+    // 預算（NT$，人民幣以 1:4.5 估算）
+    const BUDGET = [
+      { item:"機票（長榮直飛，3 人）", amount:44352, note:"已付", paid:true },
+      { item:"住宿 3 晚", amount:3520, note:"已訂：新良約 NT$1,040 × 2＋千嶼約 NT$1,440（以訂單為準）", booked:true },
+      { item:"門票", amount:1500, note:"熊貓谷、梨園會館，約 ¥330" },
+      { item:"當地交通", amount:2300, note:"滴滴、城際、地鐵，約 ¥500" },
+      { item:"餐飲", amount:5400, note:"以在地小吃為主，約 ¥300／天" },
+      { item:"水果、零食、雜支", amount:2300, note:"約 ¥500" },
+      { item:"購物預留", amount:3000, note:"鞋子一雙、熊貓玩偶、糕點，依實際" },
+    ];
+
+    const SUMMARY = {
+      flights: [
+        { route:"桃園 → 成都雙流 T1", method:"Day 1（五）14:20–18:05" },
+        { route:"成都雙流 T1 → 桃園", method:"Day 4（一）19:20–22:40" },
+        { route:"機票總額", method:"NT$44,352（已付）" },
+      ],
+      accommodation: [
+        { city:"成都", nights:"Day 1（五）", name:"安逸・新良大飯店（成都春熙路太古里店）", room:"星眠親子大小床：1.8 米＋1.2 米，城市景觀，8–22 樓", address:"成都市锦江区东大街上东大街段246号", note:"春熙路地鐵站步行約 9 分鐘" },
+        { city:"都江堰", nights:"Day 2（六）", name:"千嶼精品民宿（都江堰景區南橋店）", room:"房型見訂單", address:"簡體地址見訂單確認信", note:"離堆公園站 210 公尺，樓下有仰天窩廣場熊貓自拍點" },
+        { city:"成都", nights:"Day 3（日）", name:"安逸・新良大飯店（同一間）", room:"同房型，含延遲退房", address:"成都市锦江区东大街上东大街段246号", note:"Day 2 寄放大行李" },
+      ],
+      transport: [
+        { route:"雙流 T1 ↔ 新良", method:"滴滴 35–40 分鐘" },
+        { route:"新良 → 寬窄巷子", method:"滴滴約 15 分鐘" },
+        { route:"通惠門 → 犀浦 → 離堆公園", method:"2 號線＋城際約 1 小時" },
+        { route:"千嶼 ↔ 熊貓谷", method:"滴滴約 15 分鐘，回程先安排" },
+        { route:"新良 → 梨園會館（文殊院店）", method:"滴滴約 3 公里" },
+        { route:"文殊坊 → 春熙路", method:"滴滴約 10 分鐘" },
+        { route:"新良 ↔ IFS", method:"走路" },
+        { route:"新良 → 東郊記憶", method:"滴滴約 20 分鐘" },
+        { route:"東郊記憶 → 建設路", method:"滴滴約 10 分鐘（走路要 2.5–3 公里）" },
+      ],
+      payment: [
+        "支付寶、微信支付（上海行已設定好）",
+        "滴滴、高德叫車都能用支付寶付款",
+        "城際車票用台胞證在 12306 或 Trip.com 買",
+      ],
+      network: [
+        "Trip.com 白金會員免費 eSIM 流量包",
+        "或用原號漫遊，免翻牆",
+      ],
+      food: [
+        "在地小吃：建設路、灌縣古城",
+        "文殊坊：洞子口張二哥涼粉、嚴太婆鍋盔、宮廷糕點、聞酥園",
+        "寬窄巷子裡的正餐性價比不高，要吃可去旁邊的實業街、奎星樓街",
+        "當季水果：耙耙柑、丑柑，在當地吃完",
+      ],
+      tips: [
+        "天氣：高溫約 11–13°C、低溫 3–5°C，陰天多、偶爾毛毛雨",
+        "穿搭：輕羽絨＋保暖內層＋好走的鞋",
+        "都江堰冬季可能在歲修期，藍眼淚效果出發前看最新現況",
+        "梨園會館不劃位，提早 30 分鐘到",
+        "下雨時叫車會比較久，多抓時間",
+        "新鮮水果、含肉的醬料不能帶回台灣",
+      ],
+    };
+
+    // 景點經緯度（WGS-84）。approx:true 表示位置概略，導航請用連結搜尋
+    const LOCATIONS = [
+      { day:0, name:"成都雙流機場 T1",       q:"成都双流国际机场T1航站楼", lat:30.5785, lng:103.9471, time:"18:05", note:"長榮直飛抵達" },
+      { day:0, name:"安逸・新良大飯店",       q:"安逸新良大酒店 春熙路太古里店", lat:30.6525, lng:104.0830, time:"19:30", note:"第 1 晚住宿，寄放大行李", approx:true },
+      { day:0, name:"李寧春熙路旗艦店",       q:"李宁 春熙路旗舰店",         lat:30.6535, lng:104.0800, time:"20:30", note:"試越影寬楦版", approx:true },
+
+      { day:1, name:"寬窄巷子",               q:"宽窄巷子",                 lat:30.6638, lng:104.0537, time:"09:00", note:"逛到 10:15" },
+      { day:1, name:"千嶼精品民宿",           q:"千屿精品民宿 都江堰 南桥",  lat:30.9925, lng:103.6215, time:"11:50", note:"離堆公園站旁，寄背包、14:00 入住", approx:true },
+      { day:1, name:"南橋・灌縣古城",         q:"都江堰南桥",               lat:30.9989, lng:103.6139, time:"18:15", note:"晚餐、藍眼淚夜景" },
+
+      { day:2, name:"熊貓谷",                 q:"都江堰熊猫谷",             lat:30.9648, lng:103.5880, time:"08:00", note:"大熊貓＋小熊貓" },
+      { day:2, name:"安逸・新良大飯店",       q:"安逸新良大酒店 春熙路太古里店", lat:30.6525, lng:104.0830, time:"13:45", note:"回同一間，拿行李、午睡", approx:true },
+      { day:2, name:"梨園會館（文殊院店）",   q:"梨园会馆 文殊院店",        lat:30.6745, lng:104.0735, time:"16:30", note:"文殊坊五嶽宮街 33 號，旁邊是文殊院", approx:true },
+      { day:2, name:"春熙路步行街",           q:"春熙路步行街",             lat:30.6560, lng:104.0785, time:"19:00", note:"散步；361° 在大科甲巷", approx:true },
+
+      { day:3, name:"IFS 爬牆熊貓",           q:"成都IFS国际金融中心",      lat:30.6556, lng:104.0806, time:"10:00", note:"7 樓看熊貓正臉" },
+      { day:3, name:"東郊記憶",               q:"东郊记忆",                 lat:30.6698, lng:104.1257, time:"10:50", note:"成都牆、老火車頭" },
+      { day:3, name:"建設路小吃",             q:"建设路小吃街",             lat:30.6745, lng:104.1035, time:"11:30", note:"小吃巡禮＋水果", approx:true },
+      { day:3, name:"成都雙流機場 T1",       q:"成都双流国际机场T1航站楼", lat:30.5785, lng:103.9471, time:"17:20", note:"19:20 起飛" },
+    ];
+
+    // 購物清單
+    const SHOPPING = [
+      { item:"寬楦跑鞋：李寧越影", icon:"👟", when:"週五 20:30", where:"李寧春熙路旗艦店（春熙路南段 19 號）", plan:"試穿滿意就直接買，剪標換上", tips:["問有沒有寬楦版（宽楦）","中國鞋碼和台灣標示不同，以試穿為準","舊鞋先放行李箱備用"] },
+      { item:"寬楦跑鞋：361° 赤焰（備案）", icon:"👟", when:"週日 19:00，逛春熙路時", where:"361° 春熙路步行街店（大科甲巷 8 號利都廣場 A 座 1 樓）", plan:"李寧不滿意才去", tips:["問赤焰有沒有寬楦版"] },
+      { item:"宮廷糕點、聞酥園", icon:"🥮", when:"週日 17:45 看完戲／週一建設路", where:"文殊院旁兩家相鄰；宮廷糕點在建設路也有店", plan:"排隊 10–15 分鐘內才買，以現場吃為主", tips:["宮廷糕點：椒鹽酥、葱油酥、拿破崙","聞酥園：千層酥、棗泥蛋糕、酸奶泡芙","有奶油的當天吃完，乾的酥餅放兩三天沒問題","帶回台灣避開含肉、含蛋黃的品項，出發前查防檢署規定"] },
+      { item:"熊貓玩偶", icon:"🧸", when:"週日熊貓谷出園前", where:"熊貓谷紀念品店", plan:"讓孩子自己挑一隻一般的", tips:["擬真熊貓（3–5 月齡約 ¥1,449–1,849）回台灣後再決定，可以當生日禮物"] },
+      { item:"瓷胎竹編杯子", icon:"🍵", when:"經過寬窄巷子、文殊坊時", where:"非遺小店，避開臨街攤位", plan:"看緣分，不刻意找", tips:["看：不露絲頭、沒有疊絲、竹絲緊貼瓷面、收口平整","手工細絲約 200–450 RMB，太便宜要小心","竹編不能泡水、不能進洗碗機"] },
+      { item:"當季水果", icon:"🍊", when:"週一建設路", where:"水果攤", plan:"耙耙柑、丑柑，在當地吃完", tips:["新鮮水果不能帶回台灣"] },
+    ];
+
+    // WGS-84 (GPS 標準) → GCJ-02 (中國「火星座標」) 轉換
+    // 高德/騰訊地圖底圖都是 GCJ-02，直接用 GPS 座標標記會偏 100–300m
+    const wgs84ToGcj02 = (lng, lat) => {
+      if (lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271) return [lng, lat];
+      const a = 6378245.0, ee = 0.00669342162296594323;
+      const x = lng - 105.0, y = lat - 35.0;
+      let dLat = -100 + 2*x + 3*y + 0.2*y*y + 0.1*x*y + 0.2*Math.sqrt(Math.abs(x));
+      dLat += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+      dLat += (20*Math.sin(y*Math.PI) + 40*Math.sin(y/3*Math.PI)) * 2/3;
+      dLat += (160*Math.sin(y/12*Math.PI) + 320*Math.sin(y*Math.PI/30)) * 2/3;
+      let dLng = 300 + x + 2*y + 0.1*x*x + 0.1*x*y + 0.1*Math.sqrt(Math.abs(x));
+      dLng += (20*Math.sin(6*x*Math.PI) + 20*Math.sin(2*x*Math.PI)) * 2/3;
+      dLng += (20*Math.sin(x*Math.PI) + 40*Math.sin(x/3*Math.PI)) * 2/3;
+      dLng += (150*Math.sin(x/12*Math.PI) + 300*Math.sin(x/30*Math.PI)) * 2/3;
+      const radLat = lat / 180 * Math.PI;
+      const magic = 1 - ee * Math.sin(radLat) * Math.sin(radLat);
+      const sqrtMagic = Math.sqrt(magic);
+      dLat = (dLat * 180) / ((a * (1 - ee)) / (magic * sqrtMagic) * Math.PI);
+      dLng = (dLng * 180) / (a / sqrtMagic * Math.cos(radLat) * Math.PI);
+      return [lng + dLng, lat + dLat];
+    };
+
+    // 兩點直線距離（公里）
+    const distKm = (a, b) => {
+      const R = 6371, r = x => x * Math.PI / 180;
+      const dLat = r(b.lat - a.lat), dLng = r(b.lng - a.lng);
+      const h = Math.sin(dLat/2)**2 + Math.cos(r(a.lat))*Math.cos(r(b.lat))*Math.sin(dLng/2)**2;
+      return 2 * R * Math.asin(Math.sqrt(h));
+    };
+    const fmtKm = k => k < 1 ? `${Math.round(k*100)*10} 公尺` : `${k < 10 ? k.toFixed(1) : Math.round(k)} 公里`;
+    const gUrl = q => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+    const aUrl = q => `https://uri.amap.com/search?keyword=${encodeURIComponent(q)}&city=${encodeURIComponent("成都")}&callnative=1`;
+
+    // 可切換的底圖來源
+    const TILE_SOURCES = [
+      { id:"amap", name:"高德",  url:"https://webrd0{s}.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&x={x}&y={y}&z={z}",
+        attribution:'&copy; 高德地图', subdomains:"1234", crs:"gcj02", note:"中文清楚，本機開檔也能用（預設）" },
+      { id:"osm",  name:"OSM",  url:"https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        attribution:'&copy; OpenStreetMap', subdomains:"abc", crs:"wgs84", note:"GitHub Pages 線上開可用，本機 file:// 會被擋" },
+      { id:"esri", name:"街道",  url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+        attribution:'&copy; Esri', subdomains:"abc", crs:"wgs84", note:"Esri 街道圖（國際版）" },
+      { id:"sat",  name:"衛星",  url:"https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+        attribution:'&copy; Esri', subdomains:"abc", crs:"wgs84", note:"衛星空照圖" },
+    ];
+
+    function MapView({ days, locations }) {
+      const mapRef = useRef(null);
+      const mapInstance = useRef(null);
+      const tileLayerRef = useRef(null);
+      const layersRef = useRef([]);
+      const [filter, setFilter] = useState("all");
+      const [tileId, setTileId] = useState("amap");
+      const tileSrc = TILE_SOURCES.find(t => t.id === tileId);
+
+      const project = (lng, lat) => tileSrc.crs === "gcj02" ? wgs84ToGcj02(lng, lat) : [lng, lat];
+
+      useEffect(() => {
+        if (!mapRef.current || mapInstance.current) return;
+        const map = L.map(mapRef.current, { center: [30.83, 103.85], zoom: 9, zoomControl: true, scrollWheelZoom: true });
+        mapInstance.current = map;
+      }, []);
+
+      useEffect(() => {
+        const map = mapInstance.current;
+        if (!map) return;
+        if (tileLayerRef.current) map.removeLayer(tileLayerRef.current);
+        tileLayerRef.current = L.tileLayer(tileSrc.url, {
+          attribution: tileSrc.attribution, subdomains: tileSrc.subdomains, maxZoom: 19,
+        }).addTo(map);
+      }, [tileId]);
+
+      useEffect(() => {
+        const map = mapInstance.current;
+        if (!map) return;
+        layersRef.current.forEach(l => map.removeLayer(l));
+        layersRef.current = [];
+        const visibleDays = filter === "all" ? days.map(d => d.day) : [filter];
+        const allPts = [];
+        visibleDays.forEach(dayNum => {
+          const day = days.find(d => d.day === dayNum);
+          const pts = locations.filter(l => l.day === dayNum);
+          if (!day || pts.length === 0) return;
+          const xy = pts.map(p => { const [lng, lat] = project(p.lng, p.lat); return { ...p, _lat:lat, _lng:lng }; });
+          if (xy.length > 1) {
+            const line = L.polyline(xy.map(p => [p._lat, p._lng]), { color: day.color, weight: 3, opacity: 0.6, dashArray: "6, 6" }).addTo(map);
+            layersRef.current.push(line);
+          }
+          xy.forEach(pt => {
+            const icon = L.divIcon({
+              className: '',
+              html: `<div class="day-marker" style="background:${day.color}">${day.weekday.charAt(1)}</div>`,
+              iconSize: [30, 30], iconAnchor: [15, 15],
+            });
+            const marker = L.marker([pt._lat, pt._lng], { icon }).addTo(map);
+            marker.bindPopup(
+              `<b>${pt.name}</b>` +
+              `<div style="color:${day.color};font-weight:600;margin-bottom:3px">${day.weekday}・${pt.time}</div>` +
+              `<div style="color:#666">${pt.note}${pt.approx ? "（位置概略）" : ""}</div>`
+            );
+            layersRef.current.push(marker);
+            allPts.push([pt._lat, pt._lng]);
+          });
+        });
+        if (allPts.length > 0) map.fitBounds(allPts, { padding: [40, 40], maxZoom: 14 });
+      }, [filter, days, locations, tileId]);
+
+      const shown = filter === "all" ? locations : locations.filter(l => l.day === filter);
+
+      return (
+        <div style={{ animation:"fadeIn 0.3s ease" }}>
+          <div style={{ background:"#0EA5E9", borderRadius:14, padding:"18px 20px", color:"#fff", marginBottom:14 }}>
+            <h2 style={{ fontSize:21, fontWeight:700, margin:"4px 0" }}>🗺️ 全部景點地圖</h2>
+            <div style={{ fontSize:13, opacity:0.9, marginTop:6, lineHeight:1.6 }}>
+              點圓圈看景點資訊，虛線是當天的移動順序。下方清單列出每一站和上一站的直線距離。到中國用「高德地圖」App 實際導航。
+            </div>
+          </div>
+
+          <div style={{ display:"flex", gap:6, marginBottom:12, flexWrap:"wrap" }}>
+            <button onClick={() => setFilter("all")}
+              style={{ padding:"8px 12px", border:"none", borderRadius:8, cursor:"pointer", fontFamily:"inherit", fontSize:12,
+                background: filter==="all" ? "#1a1a1a" : "#f5f0eb", color: filter==="all" ? "#fff" : "#666", fontWeight: filter==="all" ? 700 : 500 }}>
+              全部
+            </button>
+            {days.map(d => (
+              <button key={d.day} onClick={() => setFilter(d.day)}
+                style={{ padding:"8px 12px", border:"none", borderRadius:8, cursor:"pointer", fontFamily:"inherit", fontSize:12,
+                  background: filter===d.day ? d.color : "#f5f0eb", color: filter===d.day ? "#fff" : "#666", fontWeight: filter===d.day ? 700 : 500 }}>
+                {d.emoji} {d.weekday}
+              </button>
+            ))}
+          </div>
+
+          <div ref={mapRef} style={{ height:460, width:"100%", borderRadius:14, overflow:"hidden", border:"1px solid #e8e0d4", marginBottom:8 }}/>
+
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap", fontSize:11 }}>
+            <span style={{ color:"#888" }}>底圖：</span>
+            {TILE_SOURCES.map(t => (
+              <button key={t.id} onClick={() => setTileId(t.id)}
+                style={{ padding:"5px 10px", border:"none", borderRadius:6, cursor:"pointer", fontFamily:"inherit", fontSize:11,
+                  background: tileId===t.id ? "#1a1a1a" : "#f5f0eb", color: tileId===t.id ? "#fff" : "#666", fontWeight: tileId===t.id ? 700 : 500 }}>
+                {t.name}
+              </button>
+            ))}
+            <span style={{ color:"#aaa", fontSize:10, flex:1, minWidth:120 }}>{tileSrc.note}</span>
+          </div>
+
+          <div style={{ background:"#f9f7f4", borderRadius:12, padding:16, marginBottom:14 }}>
+            <h3 style={{ fontSize:14, fontWeight:700, marginBottom:10, color:"#444" }}>📍 景點一覽（{filter==="all" ? `共 ${locations.length} 站` : days.find(d=>d.day===filter)?.weekday}）</h3>
+            {shown.map((pt, i) => {
+              const day = days.find(d => d.day === pt.day);
+              const prev = i > 0 && shown[i-1].day === pt.day ? shown[i-1] : null;
+              return (
+                <div key={i} style={{ padding:"8px 0", borderBottom:"1px dashed #e8e0d4", fontSize:13 }}>
+                  {prev && (
+                    <div style={{ fontSize:11, color:day.color, marginBottom:4, paddingLeft:32 }}>↓ 距上一站直線 {fmtKm(distKm(prev, pt))}</div>
+                  )}
+                  <div style={{ display:"flex", alignItems:"flex-start" }}>
+                    <div style={{ width:22, height:22, borderRadius:"50%", background:day.color, color:"#fff", display:"flex", alignItems:"center", justifyContent:"center", fontWeight:700, fontSize:11, flexShrink:0, marginRight:10, marginTop:1 }}>{day.weekday.charAt(1)}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontWeight:600 }}>{pt.name}{pt.approx && <span style={{ fontSize:10, color:"#b8860b", fontWeight:500 }}>（位置概略）</span>}</div>
+                      <div style={{ color:"#888", fontSize:11, marginTop:1 }}>{pt.time}・{pt.note}</div>
+                    </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:4, marginLeft:8, alignSelf:"center" }}>
+                      <a href={aUrl(pt.q)} target="_blank" rel="noopener" style={{ fontSize:11, color:"#0EA5E9", textDecoration:"none", whiteSpace:"nowrap" }}>高德 ↗</a>
+                      <a href={gUrl(pt.q)} target="_blank" rel="noopener" style={{ fontSize:11, color:"#0EA5E9", textDecoration:"none", whiteSpace:"nowrap" }}>Google ↗</a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ background:"#fffbf0", border:"1px solid #f0e6cc", borderRadius:10, padding:"14px 16px" }}>
+            <div style={{ fontSize:13, fontWeight:600, color:"#b8860b", marginBottom:6 }}>💡 地圖說明</div>
+            <div style={{ fontSize:12, color:"#666", lineHeight:1.7 }}>
+              高德底圖已做 WGS-84 → GCJ-02 座標轉換，標記不會偏移。標「位置概略」的點，實際位置請點「高德 ↗」用地名搜尋。在中國 Google 地圖需要翻牆，以高德為主。
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function BookingView() {
+      const KEY = "chengdu-trip-booking";
+      const [checked, setChecked] = useState(() => {
+        try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+      });
+      useEffect(() => {
+        try { localStorage.setItem(KEY, JSON.stringify(checked)); } catch (e) {}
+      }, [checked]);
+      const isDone = it => checked[it.id] !== undefined ? checked[it.id] : !!it.done;
+      const all = BOOKING.flatMap(g => g.items);
+      const doneCount = all.filter(isDone).length;
+      return (
+        <div style={{ animation:"fadeIn 0.3s ease" }}>
+          <div style={{ background:"#2F7D5B", borderRadius:14, padding:"18px 20px", color:"#fff", marginBottom:16 }}>
+            <h2 style={{ fontSize:21, fontWeight:700, margin:"4px 0" }}>✅ 預訂清單</h2>
+            <div style={{ fontSize:13, opacity:0.9, marginTop:6 }}>已完成 {doneCount} / {all.length}。勾選狀態會記在這支手機上。</div>
+          </div>
+          {BOOKING.map((g, gi) => (
+            <div key={gi} style={{ background:"#f9f7f4", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+              <h3 style={{ fontSize:15, fontWeight:700, margin:"0 0 8px", color:g.color }}>{g.group}</h3>
+              {g.items.map(it => {
+                const d = isDone(it);
+                return (
+                  <label key={it.id} style={{ display:"flex", alignItems:"flex-start", gap:10, padding:"8px 0", fontSize:14, lineHeight:1.5, cursor:"pointer", color: d ? "#999" : "#333" }}>
+                    <input type="checkbox" checked={d}
+                      onChange={() => setChecked({ ...checked, [it.id]: !d })}
+                      style={{ width:18, height:18, marginTop:2, accentColor:g.color, flexShrink:0 }}/>
+                    <span style={{ textDecoration: d ? "line-through" : "none" }}>{it.text}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function ShoppingView() {
+      return (
+        <div style={{ animation:"fadeIn 0.3s ease" }}>
+          <div style={{ background:"#C1440E", borderRadius:14, padding:"18px 20px", color:"#fff", marginBottom:16 }}>
+            <h2 style={{ fontSize:21, fontWeight:700, margin:"4px 0" }}>🛍️ 購物清單</h2>
+            <div style={{ fontSize:13, opacity:0.9, marginTop:6 }}>路上看到再買，不刻意安排。淘寶買得到的可以直接寄回台灣。</div>
+          </div>
+          {SHOPPING.map((s,i) => (
+            <div key={i} style={{ background:"#f9f7f4", borderRadius:12, padding:"14px 16px", marginBottom:12 }}>
+              <div style={{ fontSize:16, fontWeight:700, marginBottom:6 }}>{s.icon} {s.item}</div>
+              <div style={{ fontSize:13, color:"#444", lineHeight:1.7 }}>
+                <div>🕒 {s.when}</div>
+                <div>📍 {s.where}</div>
+                <div style={{ color:"#C1440E", fontWeight:600 }}>👉 {s.plan}</div>
+              </div>
+              {s.tips.map((t,j) => (
+                <div key={j} style={{ fontSize:12, color:"#777", lineHeight:1.6, marginTop:4 }}>• {t}</div>
+              ))}
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    const parseStartMin = (timeStr) => {
+      const m = String(timeStr).match(/(\d{1,2}):(\d{2})/);
+      if (!m) return null;
+      return parseInt(m[1])*60 + parseInt(m[2]);
+    };
+    const findActiveScheduleIdx = (schedule, nowMin) => {
+      const times = schedule.map(s => parseStartMin(s.time));
+      for (let i=0; i<times.length; i++) {
+        if (times[i] !== null && times[i] > nowMin) return i;
+      }
+      return -1;
+    };
+
+    function App() {
+      const [tripStart, setTripStart] = useState(loadTripStart);
+      const dayOf = d => tripStart ? Math.floor((d - tripStart) / 86400000) : null;
+      const getInitialDay = () => {
+        const diff = dayOf(new Date());
+        return (diff !== null && diff >= 0 && diff < TRIP_DAYS) ? diff : 0;
+      };
+      const saveTripStart = (value) => {
+        try { value ? localStorage.setItem(START_KEY, value) : localStorage.removeItem(START_KEY); } catch (e) {}
+        setTripStart(parseYmd(value));
+      };
+      const [activeDay, setActiveDay] = useState(getInitialDay);
+      const [view, setView] = useState("day");
+      const [now, setNow] = useState(new Date());
+      const [sim, setSim] = useState(null); // 模擬時刻：{ dayIdx, min }
+      const [showSimMenu, setShowSimMenu] = useState(false);
+      const current = DAYS[activeDay];
+
+      useEffect(() => {
+        const id = setInterval(() => setNow(new Date()), 60000);
+        return () => clearInterval(id);
+      }, []);
+
+      const dayDiff = sim ? sim.dayIdx : dayOf(now);
+      const isToday = dayDiff === activeDay && dayDiff >= 0 && dayDiff < TRIP_DAYS;
+      const nowMin = sim ? sim.min : now.getHours()*60 + now.getMinutes();
+      const upcomingIdx = isToday ? findActiveScheduleIdx(current.schedule, nowMin) : null;
+
+      const SIM_PRESETS = [
+        { label:"關閉模擬",            dayIdx:null },
+        { label:"週五 11:00 出發前",    dayIdx:0, min:11*60 },
+        { label:"週五 19:00 抵達",      dayIdx:0, min:19*60 },
+        { label:"週六 09:30 寬窄巷子",  dayIdx:1, min:9*60+30 },
+        { label:"週六 18:30 南橋夜景",  dayIdx:1, min:18*60+30 },
+        { label:"週日 08:30 熊貓谷",    dayIdx:2, min:8*60+30 },
+        { label:"週日 15:45 往梨園會館", dayIdx:2, min:15*60+45 },
+        { label:"週日 19:00 春熙路",    dayIdx:2, min:19*60 },
+        { label:"週一 10:45 東郊記憶",  dayIdx:3, min:10*60+45 },
+        { label:"週一 23:30 已結束",    dayIdx:3, min:23*60+30 },
+      ];
+
+      const total = BUDGET.reduce((s, b) => s + b.amount, 0);
+      const paid = BUDGET.filter(b => b.paid).reduce((s, b) => s + b.amount, 0);
+      const nt = n => "NT$" + n.toLocaleString("en-US");
+
+      return (
+        <div style={{ fontFamily:"'Noto Serif TC','Georgia',serif", maxWidth:680, margin:"0 auto", padding:"16px 12px", color:"#1a1a1a" }}>
+          <div style={{ textAlign:"center", marginBottom:28, paddingBottom:20, borderBottom:"2px solid #e8e0d4" }}>
+            <div style={{ fontSize:13, letterSpacing:4, color:"#888", marginBottom:6 }}>CHENGDU & DUJIANGYAN</div>
+            <h1 style={{ fontSize:26, fontWeight:700, margin:"4px 0", lineHeight:1.3 }}>成都・都江堰 4天3夜</h1>
+            <div style={{ fontSize:14, color:"#666", marginTop:4 }}>Day 1（五）→ Day 4（一）｜一家三口｜桃園進出</div>
+          </div>
+
+          <div style={{ display:"flex", gap:6, marginBottom:14, overflowX:"auto", paddingBottom:4 }}>
+            {[
+              { id:"day",     label:"行程", sub:current.weekday, icon:"📅", color:current.color },
+              { id:"map",     label:"地圖", sub:"距離",           icon:"🗺️", color:"#0EA5E9" },
+              { id:"booking", label:"預訂", sub:"清單",           icon:"✅", color:"#2F7D5B" },
+              { id:"shopping", label:"購物", sub:"清單",          icon:"🛍️", color:"#C1440E" },
+              { id:"summary", label:"總覽", sub:"預算",           icon:"ℹ️", color:"#1a1a1a" },
+            ].map(t => (
+              <button key={t.id} onClick={() => setView(t.id)}
+                style={{ flex:"1 1 0", padding:"10px 5px", border:"none", borderRadius:10, cursor:"pointer", fontSize:12, fontFamily:"inherit", minWidth:56,
+                  transition:"all 0.2s", background: view===t.id ? t.color : "#f5f0eb", color: view===t.id ? "#fff" : "#666", fontWeight: view===t.id ? 700 : 400 }}>
+                <div style={{ fontSize:16, marginBottom:2 }}>{t.icon}</div>
+                <div>{t.label}</div>
+                <div style={{ fontSize:10, opacity:0.85 }}>{t.sub}</div>
+              </button>
+            ))}
+          </div>
+
+          {view === "day" && (
+            <div style={{ display:"flex", gap:3, marginBottom:16, overflowX:"auto", paddingBottom:4 }}>
+              {DAYS.map((d,i) => (
+                <button key={i} onClick={() => setActiveDay(i)}
+                  style={{ flex:"1 0 auto", padding:"8px 5px", border:"none", borderRadius:8, cursor:"pointer", fontSize:11, fontFamily:"inherit", minWidth:60,
+                    transition:"all 0.2s", background: activeDay===i ? d.color : "#f5f0eb", color: activeDay===i ? "#fff" : "#666", fontWeight: activeDay===i ? 700 : 400 }}>
+                  <div style={{ fontSize:13, marginBottom:1 }}>{d.emoji}</div>
+                  <div style={{ fontSize:13, fontWeight: activeDay===i ? 700 : 500 }}>{d.weekday}</div>
+                  <div style={{ fontSize:10, opacity:0.85 }}>{d.date}</div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {view === "map" && <MapView days={DAYS} locations={LOCATIONS}/>}
+
+          {view === "booking" && <BookingView/>}
+
+          {view === "shopping" && <ShoppingView/>}
+
+          {view === "summary" && (
+            <div style={{ animation:"fadeIn 0.3s ease" }}>
+              <div style={{ background:"#f9f7f4", borderRadius:12, padding:18, marginBottom:14 }}>
+                <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12, color:"#0EA5E9" }}>✈️ 機票（已訂）</h3>
+                {SUMMARY.flights.map((f,i) => (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, padding:"8px 0", borderBottom: i<SUMMARY.flights.length-1 ? "1px solid #e8e0d4":"none", fontSize:13 }}>
+                    <div>{f.route}</div><div style={{ color:"#666", fontWeight:500, textAlign:"right" }}>{f.method}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ background:"#f9f7f4", borderRadius:12, padding:18, marginBottom:14 }}>
+                <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12, color:"#2D6A4F" }}>🏨 住宿（已訂，可免費取消）</h3>
+                {SUMMARY.accommodation.map((a,i) => (
+                  <div key={i} style={{ padding:"10px 0", borderBottom: i<SUMMARY.accommodation.length-1 ? "1px solid #e8e0d4":"none", fontSize:13 }}>
+                    <div style={{ fontWeight:600, marginBottom:2 }}>{a.city} <span style={{ color:"#888", fontWeight:400 }}>{a.nights}</span></div>
+                    <div style={{ fontWeight:600, color:"#2D6A4F" }}>{a.name}</div>
+                    <div style={{ color:"#666", marginTop:2 }}>{a.room}</div>
+                    <div style={{ color:"#666", marginTop:2 }}>📍 {a.address}</div>
+                    <div style={{ color:"#999", fontSize:12, marginTop:2 }}>{a.note}</div>
+                  </div>
+                ))}
+                <div style={{ fontSize:11, color:"#999", marginTop:8 }}>簡體地址可以直接給司機看。飯店電話在訂單確認信裡。</div>
+              </div>
+              <div style={{ background:"#f9f7f4", borderRadius:12, padding:18, marginBottom:14 }}>
+                <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12, color:"#E63946" }}>🚄 交通方式</h3>
+                {SUMMARY.transport.map((t,i) => (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", gap:8, padding:"8px 0", borderBottom: i<SUMMARY.transport.length-1 ? "1px solid #e8e0d4":"none", fontSize:13 }}>
+                    <div>{t.route}</div><div style={{ color:"#666", fontWeight:500, textAlign:"right" }}>{t.method}</div>
+                  </div>
+                ))}
+              </div>
+              {[
+                { title:"💳 付款", color:"#D4A017", list: SUMMARY.payment },
+                { title:"📶 網路", color:"#0891B2", list: SUMMARY.network },
+                { title:"🍜 吃什麼", color:"#C1440E", list: SUMMARY.food },
+                { title:"💡 注意事項", color:"#6B705C", list: SUMMARY.tips },
+              ].map((sec,si) => (
+                <div key={si} style={{ background:"#f9f7f4", borderRadius:12, padding:18, marginBottom:14 }}>
+                  <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12, color:sec.color }}>{sec.title}</h3>
+                  {sec.list.map((item,i) => (
+                    <div key={i} style={{ padding:"6px 0", fontSize:14, lineHeight:1.6, color:"#444" }}>• {item}</div>
+                  ))}
+                </div>
+              ))}
+              <div style={{ background:"#fff", border:"2px solid #1a1a1a", borderRadius:12, padding:18, marginBottom:14 }}>
+                <h3 style={{ fontSize:15, fontWeight:700, marginBottom:12 }}>💰 預算表（一家三口）</h3>
+                {BUDGET.map((b,i) => (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:10, padding:"8px 0", borderBottom:"1px solid #e8e0d4", fontSize:13 }}>
+                    <div>
+                      <div style={{ fontWeight:600 }}>{b.item}</div>
+                      <div style={{ color:"#888", fontSize:11, marginTop:1 }}>{b.note}</div>
+                    </div>
+                    <div style={{ fontWeight:700, whiteSpace:"nowrap", color: b.paid ? "#2F7D5B" : b.booked ? "#457B9D" : "#1a1a1a" }}>{nt(b.amount)}{b.paid && " ✓"}{b.booked && " 已訂"}</div>
+                  </div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"space-between", padding:"12px 0 4px", fontSize:16, fontWeight:700 }}>
+                  <div>合計</div><div>{nt(total)}</div>
+                </div>
+                <div style={{ fontSize:12, color:"#666", lineHeight:1.7 }}>
+                  已付 {nt(paid)}｜單日成本約 {nt(Math.round(total / TRIP_DAYS / 100) * 100)}<br/>
+                  參考：上海蘇州每天約 NT$10,000、花蓮每天約 NT$6,000。這趟天數短，機票佔比高，單日成本較高。
+                </div>
+                <div style={{ fontSize:11, color:"#999", marginTop:8 }}>人民幣以 1:4.5 估算；門票、交通、餐飲為預估。</div>
+              </div>
+            </div>
+          )}
+
+          {view === "day" && (
+            <div style={{ animation:"fadeIn 0.3s ease" }}>
+              {isToday && upcomingIdx !== null && upcomingIdx >= 0 && (
+                <div style={{ background:"#fff", border:`2px solid ${current.color}`, borderRadius:14, padding:"14px 16px", marginBottom:12 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
+                    <div style={{ background:current.color, color:"#fff", fontSize:11, fontWeight:700, padding:"3px 8px", borderRadius:12 }}>
+                      ⏰ {String(Math.floor(nowMin/60)).padStart(2,'0')}:{String(nowMin%60).padStart(2,'0')}{sim && " 🧪"}
+                    </div>
+                    <div style={{ fontSize:12, color:"#888" }}>接下來：</div>
+                  </div>
+                  <div style={{ fontSize:17, fontWeight:700, color:current.color, marginBottom:4 }}>
+                    {current.schedule[upcomingIdx].icon} {current.schedule[upcomingIdx].activity}
+                  </div>
+                  <div style={{ fontSize:12, color:"#999", marginBottom:6 }}>{current.schedule[upcomingIdx].time}</div>
+                  <div style={{ fontSize:13, color:"#555", lineHeight:1.6 }}>{current.schedule[upcomingIdx].detail}</div>
+                </div>
+              )}
+              {isToday && upcomingIdx === -1 && (
+                <div style={{ background:"#f9f7f4", borderRadius:14, padding:"14px 16px", marginBottom:12, fontSize:13, color:"#888", textAlign:"center" }}>
+                  🌙 今天的行程都結束了，好好休息～
+                </div>
+              )}
+              <div style={{ background:current.color, borderRadius:14, padding:"18px 20px", color:"#fff", marginBottom:16 }}>
+                <div style={{ fontSize:13, opacity:0.8, marginBottom:2 }}>{current.weekday} {current.date}{isToday && " ・ 今天"}</div>
+                <h2 style={{ fontSize:22, fontWeight:700, margin:"4px 0" }}>{current.title}</h2>
+                <div style={{ fontSize:14, opacity:0.85, marginTop:4 }}>{current.subtitle}</div>
+                <div style={{ display:"flex", gap:16, marginTop:14, fontSize:12, opacity:0.85, flexWrap:"wrap" }}>
+                  <div>🚌 {current.transport}</div><div>🏨 {current.hotel}</div>
+                </div>
+              </div>
+              <div style={{ background:"#f9f7f4", borderRadius:10, padding:"10px 14px", marginBottom:16, fontSize:13, color:"#666", lineHeight:1.6 }}>🗺️ {current.transportDetail}</div>
+              <div style={{ position:"relative", paddingLeft:24 }}>
+                <div style={{ position:"absolute", left:7, top:8, bottom:8, width:2, background:"#e8e0d4" }}/>
+                {current.schedule.map((s,i) => {
+                  const isUpcoming = isToday && upcomingIdx === i;
+                  const isPast = isToday && upcomingIdx !== null && (upcomingIdx === -1 || i < upcomingIdx);
+                  return (
+                    <div key={i} style={{ position:"relative", marginBottom:18, paddingLeft:20, opacity: isPast ? 0.4 : 1 }}>
+                      <div style={{ position:"absolute", left:-20, top:4, width:16, height:16, borderRadius:"50%", background:isUpcoming ? "#fff" : current.color, border: isUpcoming ? `2px solid ${current.color}` : "none", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color: isUpcoming ? current.color : "#fff", zIndex:1, boxShadow: isUpcoming ? `0 0 0 4px ${current.color}33` : "none" }}>{isUpcoming ? "▶" : "●"}</div>
+                      <div style={{ fontSize:12, color: isUpcoming ? current.color : "#999", fontWeight: isUpcoming ? 700 : 500, marginBottom:2 }}>{s.time}{isPast && " ✓"}</div>
+                      <div style={{ fontSize:15, fontWeight:600, marginBottom:3 }}>{s.icon} {s.activity}</div>
+                      {s.detail && <div style={{ fontSize:13, color:"#666", lineHeight:1.6 }}>{s.detail}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ background:"#fffbf0", border:"1px solid #f0e6cc", borderRadius:10, padding:"14px 16px", marginTop:8 }}>
+                <div style={{ fontSize:13, fontWeight:600, color:"#b8860b", marginBottom:4 }}>💡 小提醒</div>
+                <div style={{ fontSize:13, color:"#666", lineHeight:1.7 }}>{current.tips}</div>
+              </div>
+            </div>
+          )}
+
+          {/* 浮動測試按鈕：模擬旅遊中的不同時刻 */}
+          <div style={{ position:"fixed", bottom:16, right:16, zIndex:9999 }}>
+            {showSimMenu && (
+              <div style={{ background:"#fff", borderRadius:12, padding:8, marginBottom:8, boxShadow:"0 4px 20px rgba(0,0,0,0.15)", border:"1px solid #e8e0d4", minWidth:180 }}>
+                <div style={{ fontSize:11, color:"#888", padding:"6px 10px 4px" }}>🧪 預覽旅遊中時刻</div>
+                {SIM_PRESETS.map((p, i) => {
+                  const active = sim === null ? p.dayIdx === null : (sim.dayIdx === p.dayIdx && sim.min === p.min);
+                  return (
+                    <button key={i}
+                      onClick={() => {
+                        setSim(p.dayIdx === null ? null : { dayIdx:p.dayIdx, min:p.min });
+                        if (p.dayIdx !== null) { setActiveDay(p.dayIdx); setView("day"); }
+                        setShowSimMenu(false);
+                      }}
+                      style={{ display:"block", width:"100%", textAlign:"left", padding:"8px 10px", border:"none", borderRadius:6, cursor:"pointer", fontSize:12, fontFamily:"inherit",
+                        background: active ? "#fff8e1" : "transparent", color: active ? "#b8860b" : "#444", fontWeight: active ? 700 : 500, marginBottom:2 }}>
+                      {p.label}
+                    </button>
+                  );
+                })}
+                <div style={{ borderTop:"1px solid #e8e0d4", marginTop:4, padding:"8px 10px 4px" }}>
+                  <div style={{ fontSize:11, color:"#888", marginBottom:4 }}>📅 出發日（只存在這支手機）</div>
+                  <input type="date" value={toYmd(tripStart)} onChange={e => saveTripStart(e.target.value)}
+                    style={{ width:"100%", boxSizing:"border-box", padding:"6px 8px", border:"1px solid #e8e0d4", borderRadius:6, fontSize:16, fontFamily:"inherit" }}/>
+                </div>
+              </div>
+            )}
+            <button onClick={() => setShowSimMenu(!showSimMenu)}
+              style={{ background: sim ? "#b8860b" : "#1a1a1a", color:"#fff", border:"none", borderRadius:24, padding:"10px 16px", cursor:"pointer", fontSize:13, fontFamily:"inherit", fontWeight:600, boxShadow:"0 4px 14px rgba(0,0,0,0.2)" }}>
+              {sim ? "🧪 模擬中" : "🧪 預覽"}
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+
+    // PWA service worker 註冊（離線可用）
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
