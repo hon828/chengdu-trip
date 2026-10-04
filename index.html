@@ -146,13 +146,13 @@
         { id:"n2", text:"新良：Day 2 寄放大行李、Day 3 回來續住" },
         { id:"n3", text:"新良：Day 4 延遲退房可以到幾點" },
       ]},
-      { group:"門票與車票", color:"#B3362B", items:[
-        { id:"t1", text:"熊貓谷門票（微信公眾號「熊貓谷」，台胞證實名）" },
-        { id:"t2b", text:"小熊貓區：依官方當期規則確認是否需預約或排隊" },
-        { id:"t4b", text:"梨園會館 Day 3 16:30 場（場次差不多時選文殊院店；備案 Day 4 14:00）" },
-        { id:"t5", text:"城際：犀浦 → 離堆公園 Day 2，11:20 左右（12306 / Trip.com）" },
-        { id:"t6", text:"城際：離堆公園 → 犀浦 Day 3，12:30 左右" },
-        { id:"t7", text:"12306：三人的台胞證乘車人資料提前驗證" },
+      { group:"門票與車票（照購買時間排）", color:"#B3362B", items:[
+        { id:"t7", text:"12306：三人的台胞證乘車人資料提前驗證", when:"出發前 1 個月內做完。核驗沒過的話，到犀浦站窗口用台胞證買城際票" },
+        { id:"t5", text:"城際：犀浦 → 離堆公園 Day 2，11:20 左右（12306 / Trip.com）", when:"乘車日 14 天前開賣（12306 預售期 15 天，含乘車當天）" },
+        { id:"t6", text:"城際：離堆公園 → 犀浦 Day 3，12:30 左右", when:"同上，比去程晚一天開賣" },
+        { id:"t4b", text:"梨園會館 Day 3 16:30 場（場次差不多時選文殊院店；備案 Day 4 14:00）", when:"出發前 1–2 週、行程確定再買：票不能退，文殊院店和春熙路店的票不通用" },
+        { id:"t1", text:"熊貓谷門票（微信公眾號「熊貓谷」，台胞證實名）", when:"約 7 天前開放預約，一開放就訂；一人一票，孩子也用自己的台胞證" },
+        { id:"t2b", text:"小熊貓區：依官方當期規則確認是否需預約或排隊", when:"訂熊貓谷門票時一起看" },
       ]},
       { group:"出發前一個月再確認", color:"#946A10", items:[
         { id:"c1", text:"熊貓谷冬季開園時間、票價、有沒有觀光車" },
@@ -524,7 +524,10 @@
                     <input type="checkbox" checked={d}
                       onChange={() => setChecked({ ...checked, [it.id]: !d })}
                       style={{ width:18, height:18, marginTop:2, accentColor:g.color, flexShrink:0 }}/>
-                    <span style={{ textDecoration: d ? "line-through" : "none" }}>{it.text}</span>
+                    <span>
+                      <span style={{ textDecoration: d ? "line-through" : "none" }}>{it.text}</span>
+                      {it.when && <span style={{ display:"block", fontSize:12, color: d ? "#bbb" : g.color, marginTop:2 }}>⏰ {it.when}</span>}
+                    </span>
                   </label>
                 );
               })}
