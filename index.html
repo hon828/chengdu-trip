@@ -111,14 +111,13 @@
         ],
         tips:"熊貓谷全程要走路，穿好走的鞋；回程車先安排好。下午的午睡很重要。梨園會館 16:30 的場次出發前一個月要確認（兩間分店場次差不多時選文殊院店），沒有的話改到週一 14:00。晚上的太古里散步是彈性的，孩子累了就直接回飯店。",
       },
-      { day:3, weekday:"週一", date:"Day 4", title:"太古里＋東郊記憶 → 回台灣", subtitle:"拍照就好，輕鬆收尾", color:"#946A10", emoji:"🏠", transport:"走路＋滴滴",
-        transportDetail:"新良 → 大慈寺、太古里、IFS（走路）→ 東郊記憶（滴滴約 20 分）→ 建設路（滴滴約 10 分）→ 新良 → 雙流 T1（滴滴約 35–40 分）",
+      { day:3, weekday:"週一", date:"Day 4", title:"東郊記憶＋建設路 → 回台灣", subtitle:"拍照就好，輕鬆收尾", color:"#946A10", emoji:"🏠", transport:"走路＋滴滴",
+        transportDetail:"新良 → 東郊記憶（滴滴約 20 分）→ 建設路（滴滴約 10 分）→ 新良 → 雙流 T1（滴滴約 35–40 分）",
         hotel:"回家！",
         schedule: [
-          { time:"08:00", activity:"睡飽、吃早餐", detail:"", icon:"☕" },
-          { time:"09:15", activity:"大慈寺", detail:"太古里中間的千年古寺，免費、不用預約，8:00 開門。從新良走過去約 5–10 分鐘。先不退房。", icon:"🛕" },
-          { time:"09:30", activity:"太古里散步拍照", detail:"店 10 點才開，但建築和巷子已經可以拍；早上光線柔和、人少。", icon:"📸" },
-          { time:"10:00", activity:"IFS 爬牆熊貓", detail:"商場開門後搭電梯上 7 樓看熊貓正臉；熊貓屁股從街上往上拍。週日晚上已經看過的話可以跳過。", icon:"🐼" },
+          { time:"08:00", activity:"睡飽、吃早餐", detail:"先不退房。", icon:"☕" },
+          { time:"可選", activity:"大慈寺", detail:"想看古寺、喝蓋碗茶再去。千年古寺，玄奘 20 歲在這裡受戒；寺裡有茶園。免費、不用預約，8:00 開門，從新良走過去約 5–10 分鐘。", icon:"🛕" },
+          { time:"可選", activity:"IFS 爬牆熊貓", detail:"週日晚上沒看到才去。商場 10:00 開門後搭電梯上 7 樓看熊貓正臉；熊貓屁股從街上往上拍。", icon:"🐼" },
           { time:"10:30", activity:"叫車去東郊記憶", detail:"約 20 分鐘。", icon:"🚕" },
           { time:"10:50", activity:"東郊記憶", detail:"拍成都牆、老火車頭，停留 20–30 分鐘，不用門票。", icon:"🚂" },
           { time:"11:15", activity:"叫車去建設路", detail:"約 10 分鐘。東郊記憶到建設路小吃街（電子科大沙河校區旁）走路要 2.5–3 公里，不要用走的。", icon:"🚕" },
@@ -252,8 +251,8 @@
       { day:2, name:"梨園會館（文殊院店）",   q:"梨园会馆 文殊院店",        lat:30.6745, lng:104.0735, time:"16:30", note:"文殊坊五嶽宮街 33 號，旁邊是文殊院", approx:true },
       { day:2, name:"太古里",                 q:"成都远洋太古里",           lat:30.6545, lng:104.0830, time:"19:00", note:"晚餐後逛夜景；IFS、361°（大科甲巷）都在附近", approx:true },
 
-      { day:3, name:"大慈寺・太古里",         q:"成都大慈寺",               lat:30.6553, lng:104.0838, time:"09:15", note:"免費、不用預約；逛完走到 IFS", approx:true },
-      { day:3, name:"IFS 爬牆熊貓",           q:"成都IFS国际金融中心",      lat:30.6556, lng:104.0806, time:"10:00", note:"7 樓看熊貓正臉" },
+      { day:3, name:"大慈寺",                 q:"成都大慈寺",               lat:30.6553, lng:104.0838, time:"可選", note:"古寺、蓋碗茶；免費、不用預約", approx:true },
+      { day:3, name:"IFS 爬牆熊貓",           q:"成都IFS国际金融中心",      lat:30.6556, lng:104.0806, time:"可選", note:"週日晚上沒看到才去；7 樓看熊貓正臉" },
       { day:3, name:"東郊記憶",               q:"东郊记忆",                 lat:30.6698, lng:104.1257, time:"10:50", note:"成都牆、老火車頭" },
       { day:3, name:"建設路小吃",             q:"建设路小吃街",             lat:30.6745, lng:104.1035, time:"11:30", note:"小吃巡禮＋水果", approx:true },
       { day:3, name:"成都雙流機場 T1",       q:"成都双流国际机场T1航站楼", lat:30.5785, lng:103.9471, time:"17:20", note:"19:20 起飛" },
@@ -825,7 +824,7 @@
                 <div style={{ position:"absolute", left:7, top:8, bottom:8, width:2, background:"#e8e0d4" }}/>
                 {current.schedule.map((s,i) => {
                   const isUpcoming = isToday && upcomingIdx === i;
-                  const isPast = isToday && upcomingIdx !== null && (upcomingIdx === -1 || i < upcomingIdx);
+                  const isPast = isToday && upcomingIdx !== null && (upcomingIdx === -1 || (parseStartMin(s.time) !== null && i < upcomingIdx));
                   return (
                     <div key={i} style={{ position:"relative", marginBottom:18, paddingLeft:20, opacity: isPast ? 0.4 : 1 }}>
                       <div style={{ position:"absolute", left:-20, top:4, width:16, height:16, borderRadius:"50%", background:isUpcoming ? "#fff" : current.color, border: isUpcoming ? `2px solid ${current.color}` : "none", display:"flex", alignItems:"center", justifyContent:"center", fontSize:8, color: isUpcoming ? current.color : "#fff", zIndex:1, boxShadow: isUpcoming ? `0 0 0 4px ${current.color}33` : "none" }}>{isUpcoming ? "▶" : "●"}</div>
